@@ -16,13 +16,14 @@ libraryDependencies ++= {
   object v {
     val akka        = "2.3.9"
     val orientDb    = "2.0.5"
+    val scalaXml    = "1.0.3"
   }
   Seq(
-    "org.scala-lang.modules" %% "scala-xml" % "1.0.3",
-    "com.orientechnologies" %  "orientdb-core"                      % v.orientDb    withSources(),
-    "com.typesafe.akka"     %% "akka-persistence-experimental"      % v.akka        withSources(),
-    "com.typesafe.akka"     %% "akka-persistence-tck-experimental"  % v.akka        % "test" withSources(),
-    "com.typesafe.akka"     %% "akka-testkit"                       % v.akka        % "test" withSources()
+    "com.orientechnologies"   %  "orientdb-core"                      % v.orientDb    withSources(),
+    "com.typesafe.akka"       %% "akka-persistence-experimental"      % v.akka        withSources(),
+    "org.scala-lang.modules"  %% "scala-xml"                          % v.scalaXml    % "test",
+    "com.typesafe.akka"       %% "akka-persistence-tck-experimental"  % v.akka        % "test" withSources(),
+    "com.typesafe.akka"       %% "akka-testkit"                       % v.akka        % "test" withSources()
   )
 }
 
