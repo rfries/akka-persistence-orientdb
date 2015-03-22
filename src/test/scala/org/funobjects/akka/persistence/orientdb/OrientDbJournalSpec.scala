@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.funobjects.akka.orientdb.journal
+package org.funobjects.akka.persistence.orientdb
 
 import akka.persistence.journal.JournalSpec
 import com.typesafe.config.ConfigFactory
@@ -28,8 +28,8 @@ class OrientDbJournalSpec extends JournalSpec {
 
   lazy override val config = ConfigFactory.parseString(
     s"""
-    akka.persistence.journal.plugin = "akka-orientdb-journal"
-    akka-orientdb-journal.db.url = "plocal:testJournal"
+    akka.persistence.journal.plugin = "funobjects-akka-orientdb-journal"
+    funobjects-akka-orientdb-journal.db.url = "plocal:testJournal"
     """)
 
   override def beforeAll(): Unit = {

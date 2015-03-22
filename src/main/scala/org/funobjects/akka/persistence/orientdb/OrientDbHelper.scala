@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.funobjects.akka.orientdb.journal
+package org.funobjects.akka.persistence.orientdb
 
 import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx

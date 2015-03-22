@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.funobjects.akka.orientdb.journal
+package org.funobjects.akka.persistence.orientdb
 
 import akka.actor.ActorLogging
 import akka.persistence._
@@ -39,7 +39,7 @@ import scala.util.control.NonFatal
 class OrientDbJournal extends SyncWriteJournal with ActorLogging {
 
   val cfg: Config = context.system.settings.config
-  val dbUrl = cfg.getString("akka-orientdb-journal.db.url")
+  val dbUrl = cfg.getString("funobjects-akka-orientdb-journal.db.url")
 
   val journalClass = "AkkaJournal"
 
@@ -148,7 +148,7 @@ class OrientDbJournal extends SyncWriteJournal with ActorLogging {
     db.close()
   }
 
-  private[journal] def checkDb(): ODatabaseDocumentTx = {
+  private[orientdb] def checkDb(): ODatabaseDocumentTx = {
 
     // retrieve the schema
     val db = OrientDbHelper.openOrCreate(dbUrl, "admin", "admin")
@@ -172,7 +172,7 @@ class OrientDbJournal extends SyncWriteJournal with ActorLogging {
   }
 
   // execute the given code within a database transaction
-  private[journal] def inTransaction(f: => Unit): Unit = {
+  private[orientdb] def inTransaction(f: => Unit): Unit = {
     try {
       db.begin()
       f
@@ -183,7 +183,7 @@ class OrientDbJournal extends SyncWriteJournal with ActorLogging {
   }
 
   // create a composite key
-  private[journal] def key(persistenceId: String, seq: Long) = {
+  private[orientdb] def key(persistenceId: String, seq: Long) = {
     val k = new OCompositeKey()
     k.addKey(persistenceId)
     k.addKey(seq)
@@ -191,20 +191,20 @@ class OrientDbJournal extends SyncWriteJournal with ActorLogging {
   }
 
   // create a partial key with persistenceId only
-  private[journal] def partialKey(persistenceId: String) = {
+  private[orientdb] def partialKey(persistenceId: String) = {
     val k = new OCompositeKey()
     k.addKey(persistenceId)
     k
   }
 
   // transform a PersistentRepr (in serialized form)
-  private[journal] def mapSerialized(bytes: Array[Byte])(transform: PersistentRepr => PersistentRepr): Array[Byte] =
+  private[orientdb] def mapSerialized(bytes: Array[Byte])(transform: PersistentRepr => PersistentRepr): Array[Byte] =
     reprBytes(transform(repr(bytes)))
 
-  private[journal] def find(keys: Seq[OCompositeKey]): Seq[ODocument] =
+  private[orientdb] def find(keys: Seq[OCompositeKey]): Seq[ODocument] =
     index.iterateEntries(keys, true)
       .map { oid => oid.getRecord[ODocument] }
       .toList
 
-  private[journal] def find(key: OCompositeKey): Option[ODocument] = find(Seq(key)).headOption
+  private[orientdb] def find(key: OCompositeKey): Option[ODocument] = find(Seq(key)).headOption
 }
