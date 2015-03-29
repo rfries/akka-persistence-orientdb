@@ -16,24 +16,20 @@
 
 package org.funobjects.akka.persistence.orientdb
 
-import akka.persistence.journal.{JournalPerfSpec,JournalSpec}
+import akka.persistence.journal.{JournalPerfSpec, JournalSpec}
 import com.typesafe.config.ConfigFactory
 
 /**
  * Created by rgf on 3/19/15.
  */
-class OrientDbJournalSpec extends JournalSpec with JournalPerfSpec {
+class ControlDbJournalSpec extends JournalSpec with JournalPerfSpec {
 
-  val dbUrl = "plocal:testJournal"
 
   lazy override val config = ConfigFactory.parseString(
     s"""
-    akka.persistence.journal.plugin = "funobjects-akka-orientdb-journal"
-    funobjects-akka-orientdb-journal.db.url = "plocal:testJournal"
     """)
 
   override def beforeAll(): Unit = {
-    OrientDbHelper.removeDatabase(dbUrl, "admin", "admin")
     super.beforeAll()
   }
 
