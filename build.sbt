@@ -14,8 +14,8 @@ fork in Test := true
 
 libraryDependencies ++= {
   object v {
-    val akka        = "2.3.9"
-    val orientDb    = "2.0.5"
+    val akka        = "2.3.11"
+    val orientDb    = "2.0.8"
     val scalaXml    = "1.0.3"
   }
   Seq(
