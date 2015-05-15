@@ -2,7 +2,7 @@ name := "akka-persistence-orientdb"
 
 organization := "org.funobjects"
 
-version := "1.0-SNAPSHOT"
+version := "0.9.1"
 
 scalaVersion := "2.11.6"
 
