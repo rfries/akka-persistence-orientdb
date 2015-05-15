@@ -104,9 +104,9 @@ class OrientDbJournal extends SyncWriteJournal with ActorLogging {
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = Future {
     OrientDbHelper.setupThreadContext(db)
 
-    val q = new OSQLSynchQuery[ODocument]("select seq from AkkaJournal where persistenceId = ? order by seq desc limit 1")
+    val q = new OSQLSynchQuery[ODocument]("select max(seq) from AkkaJournal where persistenceId = ?")
     val res: java.util.List[ODocument] = db.command(q).execute(persistenceId)
-    res.headOption.map(_.field("seq").asInstanceOf[Long]).getOrElse(0L)
+    res.headOption.map(_.field("max").asInstanceOf[Long]).getOrElse(0L)
   }
 
   @deprecated("writeConfirmations will be removed, since Channels will be removed.")
