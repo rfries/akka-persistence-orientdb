@@ -2,9 +2,9 @@ name := "akka-persistence-orientdb"
 
 organization := "org.funobjects"
 
-version := "1.0-SNAPSHOT"
+version := "1.0.0-RC1"
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.7"
 
 resolvers += Resolver.sonatypeRepo("public")
 
@@ -14,8 +14,8 @@ fork in Test := true
 
 libraryDependencies ++= {
   object v {
-    val akka        = "2.3.11"
-    val orientDb    = "2.0.8"
+    val akka        = "2.3.13"
+    val orientDb    = "2.1.1"
     val scalaXml    = "1.0.3"
   }
   Seq(
