@@ -22,12 +22,7 @@ import com.typesafe.config.ConfigFactory
 /**
  * Created by rgf on 3/19/15.
  */
-class ControlDbJournalSpec extends JournalSpec with JournalPerfSpec {
-
-
-  lazy override val config = ConfigFactory.parseString(
-    s"""
-    """)
+class ControlDbJournalSpec extends JournalPerfSpec(ControlDbJournalSpec.config) {
 
   override def beforeAll(): Unit = {
     super.beforeAll()
@@ -37,4 +32,11 @@ class ControlDbJournalSpec extends JournalSpec with JournalPerfSpec {
     super.afterAll()
   }
 
+}
+
+object ControlDbJournalSpec {
+  val config = ConfigFactory.parseString(
+    s"""
+    akka.persistence.journal.plugin = "akka.persistence.journal.leveldb"
+    """)
 }
