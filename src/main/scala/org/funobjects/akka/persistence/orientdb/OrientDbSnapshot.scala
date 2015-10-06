@@ -112,7 +112,7 @@ class OrientDbSnapshot extends SnapshotStore {
 
   override def delete(persistenceId: String, criteria: SnapshotSelectionCriteria): Unit = {
     OrientDbHelper.setupThreadContext(db)
-    val q = new OSQLSynchQuery[ODocument]("delete from AkkaSnapshot where persistenceId = ? and seq < ? and timestamp < ?")
+    val q = new OSQLSynchQuery[ODocument]("delete from AkkaSnapshot where persistenceId = ? and seq <= ? and timestamp <= ?")
     val res: java.util.List[ODocument] = db.command(q).execute(persistenceId, criteria.maxSequenceNr.asInstanceOf[AnyRef], criteria.maxTimestamp.asInstanceOf[AnyRef])
   }
 
@@ -133,7 +133,9 @@ class OrientDbSnapshot extends SnapshotStore {
 
     // create a unique index on the composite key of (persistentId, seq)
     seqIndex = Option(cls.getClassIndex(seqIndexName)) getOrElse cls.createIndex(seqIndexName, OClass.INDEX_TYPE.UNIQUE, persistenceId, seq)
-    tsIndex = Option(cls.getClassIndex(tsIndexName)) getOrElse cls.createIndex(seqIndexName, OClass.INDEX_TYPE.UNIQUE, persistenceId, timestamp)
+    tsIndex = Option(cls.getClassIndex(tsIndexName)) getOrElse cls.createIndex(tsIndexName, OClass.INDEX_TYPE.UNIQUE, persistenceId, timestamp)
+
+    schema.save()
 
     // make sure that everything ends up with right type
     assert(cls.getProperty(persistenceId).getType == OType.STRING)
