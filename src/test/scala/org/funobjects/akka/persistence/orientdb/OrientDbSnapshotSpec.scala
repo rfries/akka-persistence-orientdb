@@ -23,15 +23,9 @@ import com.typesafe.config.ConfigFactory
 /**
  * Created by rgf on 3/19/15.
  */
-class OrientDbSnapshotSpec extends SnapshotStoreSpec {
+class OrientDbSnapshotSpec extends SnapshotStoreSpec(OrientDbSnapshotSpec.config) {
 
   val dbUrl = "plocal:testSnapshot"
-
-  lazy override val config = ConfigFactory.parseString(
-    s"""
-    akka.persistence.journal.plugin = "funobjects-akka-orientdb-snapshot"
-    funobjects-akka-orientdb-snapshot.db.url = "plocal:testSnapshot"
-    """)
 
   override def beforeAll(): Unit = {
     OrientDbHelper.removeDatabase(dbUrl, "admin", "admin")
@@ -42,4 +36,12 @@ class OrientDbSnapshotSpec extends SnapshotStoreSpec {
     super.afterAll()
   }
 
+}
+
+object OrientDbSnapshotSpec {
+  val config = ConfigFactory.parseString(
+    s"""
+    akka.persistence.snapshot-store.plugin = "funobjects-akka-orientdb-snapshot"
+    funobjects-akka-orientdb-snapshot.db.url = "plocal:testSnapshot"
+    """)
 }

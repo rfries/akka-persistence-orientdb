@@ -23,6 +23,7 @@ import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx
 import com.orientechnologies.orient.core.index.OIndex
 import com.orientechnologies.orient.core.metadata.schema.{OClass, OType}
 import com.orientechnologies.orient.core.record.impl.ODocument
+import com.orientechnologies.orient.core.sql.OCommandSQL
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery
 import com.typesafe.config.Config
 
@@ -34,11 +35,9 @@ case class Snap(o: Any)
 /**
  * OrientDB snapshot support for Akka Persistence.
  */
-class OrientDbSnapshot extends SnapshotStore {
 
-  val cfg: Config = context.system.settings.config
-  val dbUrl = cfg.getString("funobjects-akka-orientdb-snapshot.db.url")
-
+object OrientDbSnapshot {
+  // orientdb class name
   val snapshotClass = "AkkaSnapshot"
 
   // property names
@@ -47,8 +46,17 @@ class OrientDbSnapshot extends SnapshotStore {
   val timestamp = "timestamp"
   val bytes = "bytes"
 
+  // index names
   val seqIndexName = s"$snapshotClass.$persistenceId.$seq"
   val tsIndexName = s"$snapshotClass.$persistenceId.$timestamp"
+}
+
+class OrientDbSnapshot extends SnapshotStore {
+
+  import OrientDbSnapshot._
+
+  val cfg: Config = context.system.settings.config
+  val dbUrl = cfg.getString("funobjects-akka-orientdb-snapshot.db.url")
 
   val serializer = SerializationExtension(context.system)
 
@@ -59,8 +67,6 @@ class OrientDbSnapshot extends SnapshotStore {
   var db: ODatabaseDocumentTx = _
   var seqIndex: OIndex[_] = _  // set by checkDb
   var tsIndex: OIndex[_] = _  // set by checkDb
-
-  var saving: Set[SnapshotMetadata] = Set.empty
 
   import context.dispatcher
 
@@ -76,22 +82,34 @@ class OrientDbSnapshot extends SnapshotStore {
 
   override def loadAsync(persistenceId: String,
     criteria: SnapshotSelectionCriteria): Future[Option[SelectedSnapshot]] = Future {
-
     OrientDbHelper.setupThreadContext(db)
-    val q = new OSQLSynchQuery[ODocument]("select bytes from AkkaSnapshot where persistenceId = ? and seq = ? and timestamp = ?")
-    val res: java.util.List[ODocument] = db.command(q).execute(persistenceId, criteria.maxSequenceNr.asInstanceOf[AnyRef], criteria.maxTimestamp.asInstanceOf[AnyRef])
+    val q = new OSQLSynchQuery[ODocument]("select * from AkkaSnapshot where " +
+      "persistenceId = ? and seq <= ? and seq >= ? and timestamp <= ? and timestamp >= ? " +
+      "order by seq desc, timestamp desc limit 1")
+
+    val res: java.util.List[ODocument] = db.command(q).execute(
+      persistenceId,
+      criteria.maxSequenceNr.asInstanceOf[AnyRef],
+      criteria.minSequenceNr.asInstanceOf[AnyRef],
+      criteria.maxTimestamp.asInstanceOf[AnyRef],
+      criteria.minTimestamp.asInstanceOf[AnyRef])
+
     res.headOption.map { doc =>
       SelectedSnapshot(
-        SnapshotMetadata(persistenceId, doc.field[Long](seq), doc.field[Long](timestamp)), snap(doc.field(bytes))
+        SnapshotMetadata(persistenceId,
+          doc.field[Long](seq),
+          doc.field[Long](timestamp)),
+        snap(doc.field(bytes)).o
       )
     }
   }
 
   override def saveAsync(metadata: SnapshotMetadata, snapshot: Any): Future[Unit] = {
-    saving += metadata
     Future {
       OrientDbHelper.setupThreadContext(db)
-      new ODocument(snapshotClass)
+      val q = new OSQLSynchQuery[ODocument]("select * from AkkaSnapshot where persistenceId = ? and seq = ?")
+      val qres: java.util.List[ODocument] = db.query(q, metadata.persistenceId.asInstanceOf[AnyRef], metadata.sequenceNr.asInstanceOf[AnyRef])
+      qres.headOption.getOrElse(new ODocument(snapshotClass))
         .field(persistenceId, metadata.persistenceId)
         .field(seq, metadata.sequenceNr)
         .field(timestamp, metadata.timestamp)
@@ -100,20 +118,31 @@ class OrientDbSnapshot extends SnapshotStore {
     }
   }
 
-  override def saved(metadata: SnapshotMetadata): Unit = {
-    saving -= metadata
+  override def deleteAsync(metadata: SnapshotMetadata): Future[Unit] = {
+    Future {
+      OrientDbHelper.setupThreadContext(db)
+      val q = new OCommandSQL("delete from AkkaSnapshot where persistenceId = ? and seq = ?")
+      val res: Int = db.command(q).execute[Int](metadata.persistenceId, metadata.sequenceNr.asInstanceOf[AnyRef])
+      if (res != 1) {
+        throw new Exception(s"Delete failed ($res).")
+      }
+    }
   }
 
-  override def delete(metadata: SnapshotMetadata): Unit = {
-    OrientDbHelper.setupThreadContext(db)
-    val q = new OSQLSynchQuery[ODocument]("delete from AkkaSnapshot where persistenceId = ? and seq = ? and timestamp = ?")
-    val res: java.util.List[ODocument] = db.command(q).execute(metadata.persistenceId, metadata.sequenceNr.asInstanceOf[AnyRef], metadata.timestamp.asInstanceOf[AnyRef])
-  }
-
-  override def delete(persistenceId: String, criteria: SnapshotSelectionCriteria): Unit = {
-    OrientDbHelper.setupThreadContext(db)
-    val q = new OSQLSynchQuery[ODocument]("delete from AkkaSnapshot where persistenceId = ? and seq <= ? and timestamp <= ?")
-    val res: java.util.List[ODocument] = db.command(q).execute(persistenceId, criteria.maxSequenceNr.asInstanceOf[AnyRef], criteria.maxTimestamp.asInstanceOf[AnyRef])
+  override def deleteAsync(persistenceId: String, criteria: SnapshotSelectionCriteria): Future[Unit] = {
+    Future {
+      OrientDbHelper.setupThreadContext(db)
+      val cmd = new OCommandSQL("delete from AkkaSnapshot where persistenceId = ? and seq <= ? and seq >= ? and timestamp <= ? and timestamp >= ?")
+      val res = db.command(cmd)
+        .execute[Int](persistenceId,
+          criteria.maxSequenceNr.asInstanceOf[AnyRef],
+          criteria.minSequenceNr.asInstanceOf[AnyRef],
+          criteria.maxTimestamp.asInstanceOf[AnyRef],
+          criteria.minTimestamp.asInstanceOf[AnyRef])
+      if (res < 1) {
+        throw new Exception(s"Delete failed ($res).")
+      }
+    }
   }
 
   private[orientdb] def checkDb(): ODatabaseDocumentTx = {

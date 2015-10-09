@@ -31,12 +31,13 @@ import com.typesafe.config.Config
 import scala.collection.immutable.Seq
 import scala.collection.JavaConversions._
 import scala.concurrent.Future
+import scala.util.Try
 import scala.util.control.NonFatal
 
 /**
  * OrientDB Journal support for Akka Persistence
  */
-class OrientDbJournal extends SyncWriteJournal with ActorLogging {
+class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
 
   val cfg: Config = context.system.settings.config
   val dbUrl = cfg.getString("funobjects-akka-orientdb-journal.db.url")
@@ -61,32 +62,34 @@ class OrientDbJournal extends SyncWriteJournal with ActorLogging {
 
   import context.dispatcher
 
-  override def deleteMessagesTo(persistenceId: String, toSequenceNr: Long, permanent: Boolean): Unit = {
-    OrientDbHelper.setupThreadContext(db)
-    inTransaction {
+
+  override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
+    Future {
+      OrientDbHelper.setupThreadContext(db)
       index.iterateEntriesMinor(key(persistenceId, toSequenceNr), true, true).foreach { oid =>
-        if (permanent)
-          db.delete(oid.getIdentity)
-        else {
-          val doc = oid.getRecord[ODocument]
-          doc.field(bytes, mapSerialized(doc.field(bytes)) { _.update(deleted = true) } )
-          doc.save()
+        db.delete(oid.getIdentity)
+      }
+    }
+  }
+
+  override def asyncWriteMessages(writes: Seq[AtomicWrite]): Future[Seq[Try[Unit]]] = {
+    Future {
+      OrientDbHelper.setupThreadContext(db)
+      writes.map { write =>
+        Try {
+          inTransaction {
+            write.payload.foreach { msg =>
+              db.save[ODocument](new ODocument(journalClass)
+                .field(seq, msg.sequenceNr)
+                .field(persistenceId, msg.persistenceId)
+                .field(bytes, reprBytes(msg)))
+            }
+          }
         }
       }
     }
   }
 
-  override def writeMessages(messages: Seq[PersistentRepr]): Unit = {
-    OrientDbHelper.setupThreadContext(db)
-    inTransaction {
-      messages.foreach { msg =>
-        db.save[ODocument](new ODocument(journalClass)
-          .field(seq, msg.sequenceNr)
-          .field(persistenceId, msg.persistenceId)
-          .field(bytes, reprBytes(msg)))
-      }
-    }
-  }
 
   override def asyncReplayMessages(persistenceId: String, fromSequenceNr: Long, toSequenceNr: Long, max: Long)
     (replayCallback: (PersistentRepr) => Unit): Future[Unit] = {
@@ -109,38 +112,9 @@ class OrientDbJournal extends SyncWriteJournal with ActorLogging {
     res.headOption.map(_.field("max").asInstanceOf[Long]).getOrElse(0L)
   }
 
-  @deprecated("writeConfirmations will be removed, since Channels will be removed.")
-  override def writeConfirmations(confirmations: Seq[PersistentConfirmation]): Unit = {
-    inTransaction {
-      confirmations
-        .map(conf => (key(conf.persistenceId, conf.sequenceNr), conf.channelId))
-        .foreach { case (key, channelId) =>
-          find(key).foreach { doc =>
-            doc.field(bytes, mapSerialized(doc.field(bytes)) ( conf => conf.update(confirms = conf.confirms :+ channelId) ) )
-            doc.save()
-          }
-        }
-    }
-  }
-
-  @deprecated("deleteMessages will be removed.")
-  override def deleteMessages(messageIds: Seq[PersistentId], permanent: Boolean): Unit = {
-    inTransaction {
-      find(messageIds.map(id => key(id.persistenceId, id.sequenceNr))).foreach { doc =>
-        if (permanent)
-          db.delete(doc.getIdentity)
-        else {
-          doc.field("bytes", mapSerialized(doc.field(bytes))(_.update(deleted = true)))
-          doc.save()
-        }
-      }
-    }
-  }
-
   override def preStart(): Unit = {
     db = checkDb()
     super.preStart()
-
   }
 
   override def postStop(): Unit = {
