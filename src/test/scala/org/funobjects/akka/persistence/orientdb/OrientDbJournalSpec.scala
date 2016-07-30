@@ -16,7 +16,8 @@
 
 package org.funobjects.akka.persistence.orientdb
 
-import akka.persistence.journal.{JournalPerfSpec,JournalSpec}
+import akka.persistence.CapabilityFlag
+import akka.persistence.journal.{JournalPerfSpec, JournalSpec}
 import com.typesafe.config.ConfigFactory
 
 /**
@@ -35,6 +36,7 @@ class OrientDbJournalSpec extends JournalPerfSpec(OrientDbJournalSpec.config) {
     super.afterAll()
   }
 
+  override protected def supportsRejectingNonSerializableObjects: CapabilityFlag = CapabilityFlag.on
 }
 
 object OrientDbJournalSpec {

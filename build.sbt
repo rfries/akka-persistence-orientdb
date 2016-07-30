@@ -2,9 +2,9 @@ name := "akka-persistence-orientdb"
 
 organization := "org.funobjects"
 
-version := "1.0.0-RC2"
+version := "1.0.0-RC3"
 
-scalaVersion := "2.11.7"
+scalaVersion := "2.11.8"
 
 resolvers += Resolver.sonatypeRepo("public")
 
@@ -14,15 +14,17 @@ fork in Test := true
 
 libraryDependencies ++= {
   object v {
-    val akka        = "2.4.0"
-    val orientDb    = "2.1.3"
-    val scalaXml    = "1.0.3"
+    val akka        = "2.4.7"
+    val levelDb     = "0.7"       // required by akka persistence
+    val levelDbJni  = "1.8"       // required by akka persistence
+    val orientDb    = "2.2.0"
+    val scalaXml    = "1.0.5"
   }
   Seq(
     "com.orientechnologies"     %  "orientdb-core"        % v.orientDb    withSources(),
     "com.typesafe.akka"         %% "akka-persistence"     % v.akka        withSources(),
-    "org.iq80.leveldb"          % "leveldb"               % "0.7",
-    "org.fusesource.leveldbjni" % "leveldbjni-all"        % "1.8",
+    "org.iq80.leveldb"          %  "leveldb"              % v.levelDb,
+    "org.fusesource.leveldbjni" %  "leveldbjni-all"       % v.levelDbJni,
     "org.scala-lang.modules"    %% "scala-xml"            % v.scalaXml    % "test",
     "com.typesafe.akka"         %% "akka-persistence-tck" % v.akka        % "test" withSources(),
     "com.typesafe.akka"         %% "akka-testkit"         % v.akka        % "test" withSources()

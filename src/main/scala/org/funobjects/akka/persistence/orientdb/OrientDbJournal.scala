@@ -43,11 +43,13 @@ class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
   val dbUrl = cfg.getString("funobjects-akka-orientdb-journal.db.url")
 
   val journalClass = "AkkaJournal"
+  val journalSeqClass = "AkkaJournalSeq"
 
   // property names
   val seq = "seq"
   val persistenceId = "persistenceId"
   val bytes = "bytes"
+  val maxSeq = "maxSeq"
 
   val seqIndex = s"$journalClass.$persistenceId.$seq"
 
@@ -107,9 +109,9 @@ class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = Future {
     OrientDbHelper.setupThreadContext(db)
 
-    val q = new OSQLSynchQuery[ODocument]("select max(seq) from AkkaJournal where persistenceId = ?")
+    val q = new OSQLSynchQuery[ODocument]("select maxSeq from AkkaJournalSeq where persistenceId = ?")
     val res: java.util.List[ODocument] = db.command(q).execute(persistenceId)
-    res.headOption.map(_.field("max").asInstanceOf[Long]).getOrElse(0L)
+    res.headOption.map(_.field(maxSeq).asInstanceOf[Long]).getOrElse(0L)
   }
 
   override def preStart(): Unit = {
@@ -137,6 +139,9 @@ class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
 
     // create a unique index on the composite key of (persistentId, seq)
     index = Option(cls.getClassIndex(seqIndex)) getOrElse cls.createIndex(seqIndex, OClass.INDEX_TYPE.UNIQUE, persistenceId, seq)
+
+    // create max seq records
+    val clsSeq = Option(schema.getClass(journalSeqClass)) getOrElse schema.createClass(journalSeqClass)
 
     // make sure that everything ends up with right type
     assert(cls.getProperty(seq).getType == OType.LONG)
