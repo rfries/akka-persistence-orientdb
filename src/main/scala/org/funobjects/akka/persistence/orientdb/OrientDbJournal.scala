@@ -20,11 +20,11 @@ import akka.actor.ActorLogging
 import akka.persistence._
 import akka.persistence.journal._
 import akka.serialization._
-
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx
 import com.orientechnologies.orient.core.index.{OCompositeKey, OIndex}
 import com.orientechnologies.orient.core.metadata.schema.{OClass, OType}
 import com.orientechnologies.orient.core.record.impl.ODocument
+import com.orientechnologies.orient.core.sql.OCommandSQL
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery
 import com.typesafe.config.Config
 
@@ -49,7 +49,6 @@ class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
   val seq = "seq"
   val persistenceId = "persistenceId"
   val bytes = "bytes"
-  val maxSeq = "maxSeq"
 
   val seqIndex = s"$journalClass.$persistenceId.$seq"
 
@@ -68,8 +67,24 @@ class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
   override def asyncDeleteMessagesTo(persistenceId: String, toSequenceNr: Long): Future[Unit] = {
     Future {
       OrientDbHelper.setupThreadContext(db)
+
+      val qmax = new OSQLSynchQuery[ODocument]("select seq from AkkaJournalSeq where persistenceId = ?")
+      val resmax: java.util.List[ODocument] = db.command(qmax).execute(persistenceId)
+      val max = resmax.headOption.map(_.field("seq").asInstanceOf[Long]).getOrElse(0L)
+
+      var delmax = max
       index.iterateEntriesMinor(key(persistenceId, toSequenceNr), true, true).foreach { oid =>
+        val delseq = oid.getRecord[ODocument].field(seq).asInstanceOf[Long]
         db.delete(oid.getIdentity)
+        if (delseq > delmax) {
+          delmax = delseq
+        }
+      }
+      if (delmax > max) {
+        val cmd = new OCommandSQL("update AkkaJournalSeq set persistenceId = ?, seq = ? upsert where persistenceId = ?")
+        val resup: java.lang.Integer = db.command(cmd).execute(persistenceId,
+          new java.lang.Long(delmax),
+          persistenceId)
       }
     }
   }
@@ -78,17 +93,16 @@ class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
     Future {
       OrientDbHelper.setupThreadContext(db)
       writes.map { write =>
-        Try {
-          inTransaction {
-            write.payload.foreach { msg =>
-              db.save[ODocument](new ODocument(journalClass)
-                .field(seq, msg.sequenceNr)
-                .field(persistenceId, msg.persistenceId)
-                .field(bytes, reprBytes(msg)))
-            }
+        inTransaction {
+          write.payload.foreach { msg =>
+            db.save[ODocument](new ODocument(journalClass)
+              .field(seq, msg.sequenceNr)
+              .field(persistenceId, msg.persistenceId)
+              .field(bytes, reprBytes(msg)))
           }
         }
-      }
+        true
+      }.map(b => Try(()))
     }
   }
 
@@ -109,9 +123,16 @@ class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
   override def asyncReadHighestSequenceNr(persistenceId: String, fromSequenceNr: Long): Future[Long] = Future {
     OrientDbHelper.setupThreadContext(db)
 
-    val q = new OSQLSynchQuery[ODocument]("select maxSeq from AkkaJournalSeq where persistenceId = ?")
+    val q = new OSQLSynchQuery[ODocument]("select max(seq) from AkkaJournal where persistenceId = ?")
     val res: java.util.List[ODocument] = db.command(q).execute(persistenceId)
-    res.headOption.map(_.field(maxSeq).asInstanceOf[Long]).getOrElse(0L)
+    val id = res.headOption.map(_.field("max").asInstanceOf[Long]).getOrElse(0L)
+    if (id == 0L) {
+      val qmax = new OSQLSynchQuery[ODocument]("select seq from AkkaJournalSeq where persistenceId = ?")
+      val resmax: java.util.List[ODocument] = db.command(qmax).execute(persistenceId)
+      resmax.headOption.map(_.field("seq").asInstanceOf[Long]).getOrElse(0L)
+    } else {
+      id
+    }
   }
 
   override def preStart(): Unit = {
@@ -142,6 +163,9 @@ class OrientDbJournal extends AsyncWriteJournal with ActorLogging {
 
     // create max seq records
     val clsSeq = Option(schema.getClass(journalSeqClass)) getOrElse schema.createClass(journalSeqClass)
+
+    Option(clsSeq.getProperty(seq)) getOrElse clsSeq.createProperty(seq, OType.LONG)
+    Option(clsSeq.getProperty(persistenceId)) getOrElse clsSeq.createProperty(persistenceId, OType.STRING)
 
     // make sure that everything ends up with right type
     assert(cls.getProperty(seq).getType == OType.LONG)

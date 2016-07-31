@@ -36,7 +36,7 @@ class OrientDbJournalSpec extends JournalPerfSpec(OrientDbJournalSpec.config) {
     super.afterAll()
   }
 
-  override protected def supportsRejectingNonSerializableObjects: CapabilityFlag = CapabilityFlag.on
+  override protected def supportsRejectingNonSerializableObjects: CapabilityFlag = false
 }
 
 object OrientDbJournalSpec {
